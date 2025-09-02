@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>공백→, 그리고 _→공백 변환기</title>
+  <style>
+    :root{
+      --bg:#0b0f14; --card:#121923; --muted:#9fb0c1; --text:#eef5ff; --accent:#4fc3f7; --btn:#1e88e5;
+    }
+    *{box-sizing:border-box}
+    body{margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Pretendard,Apple SD Gothic Neo,Noto Sans KR,sans-serif; background:linear-gradient(180deg,#0b0f14,#0e131a 35%,#0b0f14); color:var(--text)}
+    header{padding:20px 16px; text-align:center}
+    header h1{margin:0; font-size:20px; font-weight:700}
+    header p{margin:6px 0 0; font-size:13px; color:var(--muted)}
+    .wrap{max-width:1100px; margin:0 auto; padding:16px}
+    .grid{display:grid; gap:12px}
+    @media(min-width:900px){.grid{grid-template-columns:1fr 1fr}}
+    .card{background:var(--card); border:1px solid #1d2733; border-radius:16px; padding:14px; box-shadow:0 6px 24px rgba(0,0,0,.35)}
+    .label{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; color:var(--muted); font-size:12px}
+    textarea{width:100%; height:260px; resize:vertical; background:#0b1118; color:var(--text); border:1px solid #273142; border-radius:10px; padding:12px; font:14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace}
+    .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+    button{appearance:none; border:none; border-radius:12px; padding:10px 14px; font-weight:700; cursor:pointer; background:var(--btn); color:white; box-shadow:0 6px 16px rgba(30,136,229,.35); transition:transform .05s ease, filter .15s ease}
+    button:hover{filter:brightness(1.05)}
+    button:active{transform:translateY(1px)}
+    .ghost{background:#233143; color:#cfe6ff}
+    .accent{background:var(--accent); color:#00263d}
+    .muted{font-size:12px; color:var(--muted)}
+    .counts{display:flex; gap:12px; font-size:12px; color:var(--muted)}
+    .footer{opacity:.75; text-align:center; font-size:12px; margin-top:16px}
+    .small{font-size:11px}
+    .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>공백 <span aria-hidden>→</span> <b class=\"mono\">, </b> &nbsp;&nbsp;그리고&nbsp;&nbsp; <b class="mono">_</b> <span aria-hidden>→</span> 공백 변환기</h1>
+    <p>순서 그대로 처리합니다: (1) 스페이스 <span class="mono">' '</span>를 모두 <span class=\"mono\">\', '\</span>로, (2) 밑줄 <span class="mono">'_'</span>을 모두 스페이스로.</p>
+  </header>
+
+  <main class="wrap">
+    <div class="grid">
+      <section class="card">
+        <div class="label"><span>입력</span><span class="counts"><span id="in-chars">0 자</span><span id="in-lines">0 줄</span></span></div>
+        <textarea id="input" placeholder="여기에 텍스트를 붙여넣으세요 (Ctrl/⌘+V)"></textarea>
+        <div class="row" style="margin-top:10px">
+          <button id="convert">변환하기</button>
+          <button class="ghost" id="clear">지우기</button>
+          <span class="muted">변환 규칙은 탭/개행은 그대로 두고, 스페이스(U+0020)만 콤마로 바꿉니다.</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="label"><span>결과</span><span class="counts"><span id="out-chars">0 자</span><span id="out-lines">0 줄</span></span></div>
+        <textarea id="output" placeholder="변환 결과가 여기에 표시됩니다" readonly></textarea>
+        <div class="row" style="margin-top:10px">
+          <button class="accent" id="copy">복사</button>
+          <button class="ghost" id="download">다운로드(.txt)</button>
+        </div>
+      </section>
+    </div>
+    <p class="footer">Tip: 붙여넣기 후 <b>변환하기</b>만 누르면 됩니다. 이미 콤마나 밑줄이 있어도 규칙대로만 변환합니다.</p>
+  </main>
+
+  <script>
+    const $ = (sel) => document.querySelector(sel);
+    const input = $('#input');
+    const output = $('#output');
+
+    const inChars = $('#in-chars');
+    const inLines = $('#in-lines');
+    const outChars = $('#out-chars');
+    const outLines = $('#out-lines');
+
+    function updateCounts() {
+      const valIn = input.value;
+      inChars.textContent = `${valIn.length} 자`;
+      inLines.textContent = `${(valIn.match(/\n/g)||[]).length + (valIn.length?1:0)} 줄`;
+
+      const valOut = output.value;
+      outChars.textContent = `${valOut.length} 자`;
+      outLines.textContent = `${(valOut.match(/\n/g)||[]).length + (valOut.length?1:0)} 줄`;
+    }
+
+    function transform(text){
+      // 1) 정확히 스페이스(U+0020)만 콤마+공백(", ")로 변환 (탭/개행/다른 공백은 그대로)
+      //    여러 개의 스페이스가 연속이면 각각 \", \"가 됩니다 (\", , , \").
+      const step1 = text.replaceAll(' ', ', ');
+      // 2) 밑줄을 스페이스로 변환
+      const step2 = step1.replaceAll('_', ' ');
+      return step2;
+    }
+
+    function doConvert(){
+      output.value = transform(input.value);
+      updateCounts();
+    }
+
+    $('#convert').addEventListener('click', doConvert);
+    $('#clear').addEventListener('click', () => { input.value = ''; output.value=''; updateCounts(); input.focus(); });
+
+    $('#copy').addEventListener('click', async () => {
+      try{
+        await navigator.clipboard.writeText(output.value);
+        flash('#copy');
+      }catch(e){
+        alert('클립보드 복사에 실패했어요. 수동으로 Ctrl/⌘+C 해주세요.');
+      }
+    });
+
+    $('#download').addEventListener('click', () => {
+      const blob = new Blob([output.value], {type:'text/plain;charset=utf-8'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'converted.txt';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    input.addEventListener('input', updateCounts);
+    window.addEventListener('load', updateCounts);
+
+    function flash(sel){
+      const el = document.querySelector(sel);
+      const prev = el.style.boxShadow;
+      el.style.boxShadow = '0 0 0 3px rgba(79,195,247,.6) inset, 0 8px 18px rgba(79,195,247,.35)';
+      setTimeout(()=>{ el.style.boxShadow = prev; }, 250);
+    }
+  </script>
+</body>
+</html>
